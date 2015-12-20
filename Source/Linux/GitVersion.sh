@@ -33,6 +33,6 @@ printf "#define GIT_BUILD_NUM				%d\n" $BUILD_NUM >> $GITHEADER
 printf "#define GIT_BUILD_VERSION			\"%d.%d.%d.%d\"\n" $MAJOR_BUILD_NUM $MINOR_BUILD_NUM $REVISION_BUILD_NUM $BUILD_NUM >> $GITHEADER
 printf "#define GIT_TAG_NAME				\"%s\"\n" $TAG_NAME >> $GITHEADER
 printf "#define GIT_BRANCH					\"%s\"\n\n" $BRANCH >> $GITHEADER
-printf "#endif\n" >> $GITHEADER
+printf "#endif // __%s_GITVERSION_HPP__\n" $PROJECT >> $GITHEADER
 
 printf "Done\n"
