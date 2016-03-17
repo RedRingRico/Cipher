@@ -1,6 +1,8 @@
 #include <iostream>
 #include <CLOC.hpp>
 #include <GitVersion.hpp>
+#include <vulkan/vulkan.h>
+#include <xcb/xcb.h>
 
 int main( int p_Argc, char **p_ppArgv )
 {
