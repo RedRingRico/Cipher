@@ -1,8 +1,7 @@
 #include <iostream>
 #include <CLOC.hpp>
 #include <GitVersion.hpp>
-#include <vulkan/vulkan.h>
-#include <xcb/xcb.h>
+#include <Game.hpp>
 
 int main( int p_Argc, char **p_ppArgv )
 {
@@ -18,6 +17,14 @@ int main( int p_Argc, char **p_ppArgv )
 	std::cout << "\tBranch:      " << GIT_BRANCH << std::endl;
 	std::cout << "\tTag:         " << GIT_TAG_NAME << std::endl;
 
-	return 0;
+	Cipher::Game TheGame;
+
+	if( TheGame.Initialise( ) != 0 )
+	{
+		std::cout << "Failed to initialise the game" << std::endl;
+		return 1;
+	}
+
+	return TheGame.Execute( );
 }
 
