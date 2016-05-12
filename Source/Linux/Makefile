@@ -62,13 +62,14 @@ CPPFLAGS	=	-c -DCIPHER_BUILD_$(BUILD_DEF) \
 				-DCIPHER_PLATFORM_$(BUILD_PLATFORM)_$(BUILD_ARCH) \
 				-DCIPHER_PLATFORM_$(BUILD_PLATFORM)_$(BUILD_ARCH)_$(BITSIZE) \
 				-DCIPHER_BITSIZE_$(BITSIZE) -DCIPHER_ARCH_$(BUILD_ARCH) \
+				-DVK_USE_PLATFORM_XCB_KHR -DVK_NO_PROTOTYPES \
 				-I$(TOPSRC)/$(PLATFORM)/Headers -I$(TOPSRC)/Common/Headers \
 				-I$(TOPSRC)/Libs
 SYSIPATH	=
 INCPATH		= 
-SYSLPATH	=	
+SYSLPATH	= -L${VULKAN_SDK}/lib
 LIBPATH		= 
-SYSLIBS		= -lrt -pthread -lvulkan -lxcb
+SYSLIBS		= -lrt -pthread -lvulkan -lxcb -ldl
 LINKFLAGS	=
 
 ##### Debug #######
