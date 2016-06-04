@@ -33,6 +33,8 @@ namespace Cipher
 		int InitialiseVulkan( );
 		bool CheckPhysicalDeviceProperties( VkPhysicalDevice p_PhysicalDevice,
 			uint32_t &p_QueueFamilyIndex );
+		bool CheckExtensionAvailability( const char *p_pExtension,
+			const std::vector< VkExtensionProperties > &p_Extensions );
 
 		void	*m_pVulkanLibraryHandle;
 
@@ -51,7 +53,6 @@ namespace Cipher
 		uint32_t					m_VulkanQueueFamilyIndex;
 		uint32_t					m_VulkanQueueCount;
 		VkQueueFamilyProperties		*m_pVulkanQueueProperties;
-		char **						m_ppExtensionNames;
 		std::vector< std::string >	m_ExtensionNames;
 	};
 }

@@ -16,5 +16,5 @@ namespace Cipher
 #include <VulkanFunctions.inl>
 }
 
-#endif // __CIPHER_VULKANFUNCITONS_HPP__
+#endif // __CIPHER_VULKANFUNCTIONS_HPP__
 

@@ -5,30 +5,7 @@
 #include <cstdlib>
 #include <dlfcn.h>
 #include <VulkanFunctions.hpp>
-
-PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupport;
-PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR
-	vkGetPhysicalDeviceSurfaceCapabilities;
-PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormats;
-PFN_vkGetPhysicalDeviceSurfacePresentModesKHR
-	vkGetPhysicalDeviceSurfacePresentModes;
-PFN_vkCreateSwapchainKHR vkCreateSwapchain;
-PFN_vkDestroySwapchainKHR vkDestroySwapchain;
-PFN_vkGetSwapchainImagesKHR vkGetSwapchainImages;
-PFN_vkAcquireNextImageKHR vkAcquireNextImage;
-PFN_vkQueuePresentKHR vkQueuePresent;
-
-#define GET_INSTANCE_PROC_ADDR( p_Instance, p_EntryPoint ) \
-	{ \
-		p_EntryPoint = ( PFN_##p_EntryPoint##KHR )vkGetInstanceProcAddr( \
-			p_Instance, #p_EntryPoint "KHR" ); \
-		if( p_EntryPoint == nullptr ) \
-		{ \
-			std::cout << "[GET_INSTANCE_PROC_ADDR] <ERROR> " \
-				"Failed to acquire: " << #p_EntryPoint << "KHR" << std::endl; \
-			return INITIALISE_ERROR_VULKAN_GET_PROC_ADDR; \
-		} \
-	}
+#include <GitVersion.hpp>
 
 namespace Cipher
 {
@@ -38,24 +15,12 @@ namespace Cipher
 		m_pScreen( nullptr ),
 		m_pDeleteWindowAtom( nullptr ),
 		m_VulkanInstance( VK_NULL_HANDLE ),
-		m_VulkanDevice( VK_NULL_HANDLE ),
-		m_ppExtensionNames( nullptr )
+		m_VulkanDevice( VK_NULL_HANDLE )
 	{
 	}
 
 	Game::~Game( )
 	{
-		/*if( m_ppExtensionNames )
-		{
-			for( size_t Extension = 0; Extension < m_ExtensionNames.size( );
-				++Extension )
-			{
-				delete [ ] m_ppExtensionNames[ Extension ];
-			}
-
-			delete [ ] m_ppExtensionNames;
-		}*/
-
 		if( m_VulkanDevice != VK_NULL_HANDLE )
 		{
 			vkDeviceWaitIdle( m_VulkanDevice );
@@ -153,13 +118,57 @@ namespace Cipher
 		return 1; \
 	}
 #include <VulkanFunctions.inl>
+
+		// Get the extensions Vulkan supports
+		uint32_t ExtensionCount = 0UL;
+
+		if( ( vkEnumerateInstanceExtensionProperties( nullptr, &ExtensionCount,
+			nullptr ) != VK_SUCCESS ) || ( ExtensionCount == 0UL ) )
+		{
+			std::cout << "[Cipher::Game::InitialiseVulkan] <ERROR> "
+				"Failed to enumerate Vulkan extenions" << std::endl;
+
+			return 1;
+		}
+
+		std::vector< VkExtensionProperties > AvailableExtensions(
+			ExtensionCount );
+
+		if( vkEnumerateInstanceExtensionProperties( nullptr, &ExtensionCount,
+			&AvailableExtensions[ 0 ] ) != VK_SUCCESS )
+		{
+			std::cout << "[Cipher::Game::InitialiseVulkan] <ERROR> "
+				"Failed to acquire Vulkan extensions" << std::endl;
+
+			return 1;
+		}
+
+		std::vector< const char * > VulkanExtensions =
+		{
+			VK_KHR_SURFACE_EXTENSION_NAME,
+			VK_KHR_XCB_SURFACE_EXTENSION_NAME
+		};
+
+		for( size_t Index = 0; Index < VulkanExtensions.size( ); ++Index )
+		{
+			if( !CheckExtensionAvailability( VulkanExtensions[ Index ],
+				AvailableExtensions ) )
+			{
+				std::cout << "[Cipher::Game::InitialiseVulkan] <ERROR> "
+					"Unable to locate extension: " <<
+					VulkanExtensions[ Index ] << std::endl;
+
+				return 1;
+			}
+		}
 		
 		VkApplicationInfo ApplicationInfo =
 		{
 			VK_STRUCTURE_TYPE_APPLICATION_INFO,
 			nullptr,
 			"Cipher",
-			VK_MAKE_VERSION( 1, 0, 0 ),
+			VK_MAKE_VERSION( GIT_MAJOR_BUILD_VERSION, GIT_MINOR_BUILD_VERSION,
+				GIT_REVISION_BUILD_NUM ),
 			"CipherEngine",
 			VK_MAKE_VERSION( 1, 0, 0 ),
 			VK_API_VERSION_1_0
@@ -173,8 +182,8 @@ namespace Cipher
 			&ApplicationInfo,
 			0,
 			nullptr,
-			0,
-			nullptr
+			static_cast< uint32_t >( VulkanExtensions.size( ) ),
+			&VulkanExtensions[ 0 ]
 		};
 
 		if( vkCreateInstance( &InstanceCreateInfo, nullptr,
@@ -280,7 +289,7 @@ namespace Cipher
 	if( !( p_Function = ( PFN_##p_Function )vkGetDeviceProcAddr( \
 		m_VulkanDevice, #p_Function ) ) ) \
 	{ \
-		std::cout << "Could not load device-level Vulkan funciton: " << \
+		std::cout << "Could not load device-level Vulkan function: " << \
 			#p_Function << std::endl; \
 		return 1;\
 	}
@@ -347,6 +356,21 @@ namespace Cipher
 		std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] <ERROR> "
 			"Physical device " << p_PhysicalDevice << " does not support the "
 			"requred properties" << std::endl;
+
+		return false;
+	}
+
+	bool Game::CheckExtensionAvailability( const char *p_pExtension,
+		const std::vector< VkExtensionProperties > &p_Extensions )
+	{
+		for( size_t Index = 0; Index < p_Extensions.size( ); ++Index )
+		{
+			if( strcmp( p_Extensions[ Index ].extensionName,
+				p_pExtension ) == 0 )
+			{
+				return true;
+			}
+		}
 
 		return false;
 	}
