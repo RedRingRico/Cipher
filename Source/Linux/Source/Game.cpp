@@ -36,6 +36,9 @@ namespace Cipher
 		{
 			dlclose( m_pVulkanLibraryHandle );
 		}
+
+		xcb_destroy_window( m_pXCBConnection, m_Window );
+		xcb_disconnect( m_pXCBConnection );
 	}
 
 	int Game::Initialise( )
@@ -55,6 +58,65 @@ namespace Cipher
 
 	int Game::Execute( )
 	{
+		xcb_intern_atom_cookie_t ProtocolsCookie = xcb_intern_atom(
+			m_pXCBConnection, 1, 12, "WM_PROTOCOLS" );
+		xcb_intern_atom_reply_t *pProtocolsReply = xcb_intern_atom_reply(
+			m_pXCBConnection, ProtocolsCookie, 0 );
+		xcb_intern_atom_cookie_t DeleteCookie = xcb_intern_atom(
+			m_pXCBConnection, 0, 16, "WM_DELETE_WINDOW" );
+		xcb_intern_atom_reply_t *pDeleteReply = xcb_intern_atom_reply(
+			m_pXCBConnection, DeleteCookie, 0 );
+		xcb_change_property( m_pXCBConnection, XCB_PROP_MODE_REPLACE, m_Window,
+			( *pProtocolsReply ).atom, 4, 32, 1, &( *pDeleteReply ).atom );
+		free( pProtocolsReply );
+
+		xcb_map_window( m_pXCBConnection, m_Window );
+		xcb_flush( m_pXCBConnection );
+
+		xcb_generic_event_t *pEvent;
+		bool Run = true;
+		bool Resize = false;
+
+		while( Run == true )
+		{
+			pEvent = xcb_poll_for_event( m_pXCBConnection );
+
+			if( pEvent != nullptr )
+			{
+				switch( pEvent->response_type & 0x7F )
+				{
+					case XCB_CONFIGURE_NOTIFY:
+					{
+						break;
+					}
+					case XCB_CLIENT_MESSAGE:
+					{
+						if( ( *( xcb_client_message_event_t * )pEvent ).data.
+							data32[ 0 ] == ( *pDeleteReply ).atom )
+						{
+							Run = false;
+						}
+						break;
+					}
+					case XCB_KEY_PRESS:
+					{
+						Run = false;
+						break;
+					}
+				}
+
+				free( pEvent );
+			}
+			else
+			{
+				if( Resize )
+				{
+				}
+			}
+		}
+
+		free( pDeleteReply );
+
 		return 0;
 	}
 
@@ -83,6 +145,26 @@ namespace Cipher
 		}
 
 		m_pScreen = ScreenItr.data;
+		m_Window = xcb_generate_id( m_pXCBConnection );
+
+		uint32_t WindowValues[ ] =
+		{
+			m_pScreen->white_pixel,
+			XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_KEY_PRESS |
+				XCB_EVENT_MASK_STRUCTURE_NOTIFY
+		};
+
+		xcb_create_window( m_pXCBConnection, XCB_COPY_FROM_PARENT, m_Window,
+			m_pScreen->root, 20, 20, 500, 500, 0,
+			XCB_WINDOW_CLASS_INPUT_OUTPUT, m_pScreen->root_visual,
+			XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK, WindowValues );
+
+		xcb_change_property( m_pXCBConnection, XCB_PROP_MODE_REPLACE, m_Window,
+			XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, strlen( "CIPHER" ),
+			"CIPHER" );
+
+		xcb_map_window( m_pXCBConnection, m_Window );
+		xcb_flush( m_pXCBConnection );
 
 		return 0;
 	}
@@ -343,6 +425,89 @@ namespace Cipher
 			&m_VulkanGraphicsQueue );
 		vkGetDeviceQueue( m_VulkanDevice, m_VulkanPresentQueueFamilyIndex, 0,
 			&m_VulkanPresentQueue );
+
+		VkSemaphoreCreateInfo SemaphoreCreateInfo =
+		{
+			VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+			nullptr,
+			0
+		};
+
+		if( ( vkCreateSemaphore( m_VulkanDevice, &SemaphoreCreateInfo,
+			nullptr, &m_VulkanImageAvailableSemaphore ) != VK_SUCCESS ) ||
+			( vkCreateSemaphore( m_VulkanDevice, &SemaphoreCreateInfo,
+			nullptr, &m_VulkanRenderingFinishedSemaphore ) != VK_SUCCESS ) )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Unable to create semaphores" << std::endl;
+
+			return false;
+		}
+
+		VkSurfaceCapabilitiesKHR SurfaceCapabilities;
+
+		if( vkGetPhysicalDeviceSurfaceCapabilitiesKHR( m_VulkanPhysicalDevice,
+			m_VulkanPresentationSurface, &SurfaceCapabilities ) != VK_SUCCESS )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Could not check presentation surface capabilities" <<
+				std::endl;
+
+			return 1;
+		}
+		
+		uint32_t FormatsCount;
+
+		if( ( vkGetPhysicalDeviceSurfaceFormatsKHR( m_VulkanPhysicalDevice,
+			m_VulkanPresentationSurface, &FormatsCount, nullptr ) !=
+			VK_SUCCESS ) || ( FormatsCount == 0UL ) )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Could not enumerate presentation surface formats" <<
+				std::endl;
+
+			return 1;
+		}
+
+		std::vector< VkSurfaceFormatKHR > SurfaceFormats( FormatsCount );
+
+		if( vkGetPhysicalDeviceSurfaceFormatsKHR( m_VulkanPhysicalDevice,
+			m_VulkanPresentationSurface, &FormatsCount,
+			&SurfaceFormats[ 0 ] ) != VK_SUCCESS )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Could not acquire presentation surface formats" <<
+				std::endl;
+
+			return 1;
+		}
+
+		uint32_t PresentModesCount;
+		if( ( vkGetPhysicalDeviceSurfacePresentModesKHR(
+			m_VulkanPhysicalDevice, m_VulkanPresentationSurface,
+			&PresentModesCount, nullptr ) != VK_SUCCESS ) ||
+			( PresentModesCount == 0UL ) )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Could not enumerate presentation surface present "
+				"modes" << std::endl;
+
+			return 1;
+		}
+
+		std::vector< VkPresentModeKHR > PresentModes( PresentModesCount );
+
+		if( vkGetPhysicalDeviceSurfacePresentModesKHR( m_VulkanPhysicalDevice,
+			m_VulkanPresentationSurface, &PresentModesCount,
+			&PresentModes[ 0 ] ) != VK_SUCCESS )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Could not acquire presentation surface present "
+				"modes" << std::endl;
+
+			return 1;
+		}
+
 
 		return 0;
 	}

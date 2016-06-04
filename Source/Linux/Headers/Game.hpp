@@ -58,6 +58,8 @@ namespace Cipher
 		uint32_t					m_VulkanGraphicsQueueFamilyIndex;
 		uint32_t					m_VulkanPresentQueueFamilyIndex;
 		uint32_t					m_VulkanQueueCount;
+		VkSemaphore					m_VulkanImageAvailableSemaphore;
+		VkSemaphore					m_VulkanRenderingFinishedSemaphore;
 		VkQueueFamilyProperties		*m_pVulkanQueueProperties;
 		std::vector< std::string >	m_ExtensionNames;
 	};
