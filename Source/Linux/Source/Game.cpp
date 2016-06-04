@@ -149,10 +149,15 @@ namespace Cipher
 			VK_KHR_XCB_SURFACE_EXTENSION_NAME
 		};
 
+		std::cout << "Vulkan instance supports " << ExtensionCount <<
+			" extensions" << std::endl;
+
+		PrintExtensionNames( AvailableExtensions );
+
 		for( size_t Index = 0; Index < VulkanExtensions.size( ); ++Index )
 		{
-			if( !CheckExtensionAvailability( VulkanExtensions[ Index ],
-				AvailableExtensions ) )
+			if( CheckExtensionAvailability( VulkanExtensions[ Index ],
+				AvailableExtensions ) == false )
 			{
 				std::cout << "[Cipher::Game::InitialiseVulkan] <ERROR> "
 					"Unable to locate extension: " <<
@@ -205,6 +210,21 @@ namespace Cipher
 	}
 #include <VulkanFunctions.inl>
 
+		VkXcbSurfaceCreateInfoKHR SurfaceCreateInfo =
+		{
+			VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+			nullptr,
+			0,
+			m_pXCBConnection,
+			m_Window
+		};
+
+		if( vkCreateXcbSurfaceKHR( m_VulkanInstance, &SurfaceCreateInfo,
+			nullptr, &m_VulkanPresentationSurface ) != VK_SUCCESS )
+		{
+			return 1;
+		}
+
 		uint32_t DeviceCount = 0UL;
 
 		if( ( vkEnumeratePhysicalDevices( m_VulkanInstance, &DeviceCount,
@@ -227,19 +247,20 @@ namespace Cipher
 			return 1;
 		}
 
-		VkPhysicalDevice SelectedPhysicalDevice = VK_NULL_HANDLE;
-		uint32_t SelectedQueueFamilyIndex = UINT32_MAX;
+		uint32_t SelectedGraphicsQueueFamilyIndex = UINT32_MAX;
+		uint32_t SelectedPresentQueueFamilyIndex = UINT32_MAX;
 
-		for( uint32_t Index = 0UL; Index < DeviceCount; ++Index )
+		for( uint32_t Device = 0; Device < DeviceCount; ++Device )
 		{
-			if( CheckPhysicalDeviceProperties( PhysicalDevices[ Index ],
-				SelectedQueueFamilyIndex ) )
+			if( CheckPhysicalDeviceProperties( PhysicalDevices[ Device ],
+				SelectedGraphicsQueueFamilyIndex,
+				SelectedPresentQueueFamilyIndex ) == true )
 			{
-				SelectedPhysicalDevice = PhysicalDevices[ Index ];
+				m_VulkanPhysicalDevice = PhysicalDevices[ Device ];
 			}
 		}
 
-		if( SelectedPhysicalDevice == VK_NULL_HANDLE )
+		if( m_VulkanPhysicalDevice == VK_NULL_HANDLE )
 		{
 			std::cout << "[Cipher::Game::Initialise] <ERROR> "
 				"Could not select the physical device based on the chosen "
@@ -248,16 +269,38 @@ namespace Cipher
 			return 1;
 		}
 
+		std::vector< VkDeviceQueueCreateInfo > QueueCreateInfo;
 		std::vector< float > QueueProperties = { 1.0f };
 
-		VkDeviceQueueCreateInfo QueueCreateInfo =
+		QueueCreateInfo.push_back(
+			{
+				VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+				nullptr,
+				0,
+				SelectedGraphicsQueueFamilyIndex,
+				static_cast< uint32_t >( QueueProperties.size( ) ),
+				&QueueProperties[ 0 ]
+			}
+		);
+
+		if( SelectedGraphicsQueueFamilyIndex !=
+			SelectedPresentQueueFamilyIndex )
 		{
-			VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-			nullptr,
-			0,
-			SelectedQueueFamilyIndex,
-			static_cast< uint32_t >( QueueProperties.size( ) ),
-			&QueueProperties[ 0 ]
+			QueueCreateInfo.push_back(
+				{
+					VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+					nullptr,
+					0,
+					SelectedPresentQueueFamilyIndex,
+					static_cast< uint32_t >( QueueProperties.size( ) ),
+					&QueueProperties[ 0 ]
+				}
+			);
+		}
+
+		std::vector< const char * > Extensions =
+		{
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		};
 
 		VkDeviceCreateInfo DeviceCreateInfo = 
@@ -265,16 +308,16 @@ namespace Cipher
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 			nullptr,
 			0,
-			1,
-			&QueueCreateInfo,
+			static_cast< uint32_t >( QueueCreateInfo.size( ) ),
+			&QueueCreateInfo[ 0 ],
 			0,
 			nullptr,
-			0,
-			nullptr,
+			static_cast< uint32_t >( Extensions.size( ) ),
+			&Extensions[ 0 ],
 			nullptr
 		};
 
-		if( vkCreateDevice( SelectedPhysicalDevice, &DeviceCreateInfo,
+		if( vkCreateDevice( m_VulkanPhysicalDevice, &DeviceCreateInfo,
 			nullptr, &m_VulkanDevice ) != VK_SUCCESS )
 		{
 			std::cout << "[Cipher::Game::Initialise] <ERROR> "
@@ -283,7 +326,8 @@ namespace Cipher
 			return 1;
 		}
 
-		m_VulkanQueueFamilyIndex = SelectedQueueFamilyIndex;
+		m_VulkanGraphicsQueueFamilyIndex = SelectedGraphicsQueueFamilyIndex;
+		m_VulkanPresentQueueFamilyIndex = SelectedPresentQueueFamilyIndex;
 
 #define VK_DEVICE_LEVEL_FUNCTION( p_Function ) \
 	if( !( p_Function = ( PFN_##p_Function )vkGetDeviceProcAddr( \
@@ -295,20 +339,76 @@ namespace Cipher
 	}
 #include <VulkanFunctions.inl>
 		
-		vkGetDeviceQueue( m_VulkanDevice, m_VulkanQueueFamilyIndex, 0,
-			&m_VulkanQueue );
+		vkGetDeviceQueue( m_VulkanDevice, m_VulkanGraphicsQueueFamilyIndex, 0,
+			&m_VulkanGraphicsQueue );
+		vkGetDeviceQueue( m_VulkanDevice, m_VulkanPresentQueueFamilyIndex, 0,
+			&m_VulkanPresentQueue );
 
 		return 0;
 	}
 
 	bool Game::CheckPhysicalDeviceProperties(
-		VkPhysicalDevice p_PhysicalDevice, uint32_t &p_QueueFamilyIndex )
+		VkPhysicalDevice p_PhysicalDevice,
+		uint32_t &p_SelectedGraphicsQueueFamilyIndex,
+		uint32_t &p_SelectedPresentQueueFamilyIndex )
 	{
+		uint32_t ExtensionCount = 0UL;
+
+		if( ( vkEnumerateDeviceExtensionProperties( p_PhysicalDevice, nullptr,
+			&ExtensionCount, nullptr ) != VK_SUCCESS ) ||
+			( ExtensionCount == 0UL ) )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Failed to enumerate physical device extensions" <<
+				std::endl;
+
+			return false;
+		}
+
+		std::vector< VkExtensionProperties > AvailableExtensions(
+			ExtensionCount );
+
+		if( vkEnumerateDeviceExtensionProperties( p_PhysicalDevice, nullptr,
+			&ExtensionCount, &AvailableExtensions[ 0 ] ) != VK_SUCCESS )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Failed to populate the extensions array" << std::endl;
+
+			return false;
+		}
+
+		std::vector< const char * > DeviceExtensions =
+		{
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		};
+
 		VkPhysicalDeviceProperties DeviceProperties;
 		VkPhysicalDeviceFeatures DeviceFeatures;
 
 		vkGetPhysicalDeviceProperties( p_PhysicalDevice, &DeviceProperties );
 		vkGetPhysicalDeviceFeatures( p_PhysicalDevice, &DeviceFeatures );
+
+
+		std::cout << "Device: \"" << DeviceProperties.deviceName <<
+			"\" Supports " << AvailableExtensions.size( ) << " extensions" <<
+			std::endl;
+
+		PrintExtensionNames( AvailableExtensions );
+
+		for( size_t Extension = 0; Extension < DeviceExtensions.size( );
+			++Extension )
+		{
+			if( CheckExtensionAvailability( DeviceExtensions[ Extension ],
+				AvailableExtensions ) == false )
+			{
+				std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+					"<ERROR> Device: \"" << p_PhysicalDevice << "\" does not "
+					"support required extension: \"" <<
+					DeviceExtensions[ Extension ] << "\"" << std::endl;
+
+				return false;
+			}
+		}
 
 		uint32_t Major = VK_VERSION_MAJOR( DeviceProperties.apiVersion );
 
@@ -337,27 +437,68 @@ namespace Cipher
 
 		std::vector< VkQueueFamilyProperties > QueueFamilyProperties(
 			QueueFamiliesCount );
+		std::vector< VkBool32 > QueuePresentSupport( QueueFamiliesCount );
 
 		vkGetPhysicalDeviceQueueFamilyProperties( p_PhysicalDevice,
 			&QueueFamiliesCount, &QueueFamilyProperties[ 0 ] );
 
+		uint32_t GraphicsQueueFamilyIndex = UINT32_MAX;
+		uint32_t PresentQueueFamilyIndex = UINT32_MAX;
+
 		for( uint32_t Index = 0UL; Index < QueueFamiliesCount; ++Index )
 		{
+			vkGetPhysicalDeviceSurfaceSupportKHR( p_PhysicalDevice,
+				Index, m_VulkanPresentationSurface,
+				&QueuePresentSupport[ Index ] );
+
 			if( ( QueueFamilyProperties[ Index ].queueCount > 0 ) &&
 				( QueueFamilyProperties[ Index ].queueFlags &
 					VK_QUEUE_GRAPHICS_BIT ) )
 			{
-				p_QueueFamilyIndex = Index;
+				// Use the first available queue that supports graphics
+				if( GraphicsQueueFamilyIndex == UINT32_MAX )
+				{
+					p_SelectedGraphicsQueueFamilyIndex = Index;
+				}
 
-				return true;
+				// If a queue supports both graphics and present, use it
+				if( QueuePresentSupport[ Index ] == VK_TRUE )
+				{
+					p_SelectedGraphicsQueueFamilyIndex = Index;
+					p_SelectedPresentQueueFamilyIndex = Index;
+
+					return true;
+				}
 			}
 		}
 
-		std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] <ERROR> "
-			"Physical device " << p_PhysicalDevice << " does not support the "
-			"requred properties" << std::endl;
+		// The queue does not support both graphica and present, use a
+		// separate queue for each
+		for( uint32_t Index = 0; Index < QueueFamiliesCount; ++Index )
+		{
+			if( QueuePresentSupport[ Index ] == true )
+			{
+				PresentQueueFamilyIndex = Index;
+				break;
+			}
+		}
 
-		return false;
+		// No suitable queue support for both graphics and/or present
+		if( ( GraphicsQueueFamilyIndex == UINT32_MAX ) ||
+			( PresentQueueFamilyIndex == UINT32_MAX ) )
+		{
+			std::cout << "[Cipher::Game::CheckPhysicalDeviceProperties] "
+				"<ERROR> Could not find a queue family with the required "
+				"properties on the physical device: \"" << p_PhysicalDevice <<
+				"\"" << std::endl;
+
+			return false;
+		}
+
+		p_SelectedGraphicsQueueFamilyIndex = GraphicsQueueFamilyIndex;
+		p_SelectedPresentQueueFamilyIndex = PresentQueueFamilyIndex;
+
+		return true;
 	}
 
 	bool Game::CheckExtensionAvailability( const char *p_pExtension,
@@ -373,6 +514,42 @@ namespace Cipher
 		}
 
 		return false;
+	}
+	void Game::PrintExtensionNames(
+		const std::vector< VkExtensionProperties > &p_Extensions )
+	{
+		size_t LongestName = 0;
+
+		for( auto Extension : p_Extensions )
+		{
+			size_t ExtensionLength = strlen( Extension.extensionName );
+
+			if( ExtensionLength > LongestName )
+			{
+				LongestName = ExtensionLength;
+			}
+		}
+
+		std::cout << "\tName";
+		for( size_t Char = strlen( "Name" ); Char < LongestName; ++Char )
+		{
+			std::cout << " ";
+		}
+		std::cout << " Version" << std::endl;
+
+		for( auto Extension : p_Extensions )
+		{
+			std::cout << "\t" << Extension.extensionName;
+			for( size_t Char = strlen( Extension.extensionName );
+				Char < LongestName; ++Char )
+			{
+				std::cout << " ";
+			}
+			std::cout << " " <<
+				VK_VERSION_MAJOR( Extension.specVersion ) << "." <<
+				VK_VERSION_MINOR( Extension.specVersion ) << "." <<
+				VK_VERSION_PATCH( Extension.specVersion ) << std::endl;
+		}
 	}
 }
 

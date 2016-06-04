@@ -32,8 +32,11 @@ namespace Cipher
 		int InitialiseXCBConnection( );
 		int InitialiseVulkan( );
 		bool CheckPhysicalDeviceProperties( VkPhysicalDevice p_PhysicalDevice,
-			uint32_t &p_QueueFamilyIndex );
+			uint32_t &p_SelectedGraphicsQueueFamilyIndex,
+			uint32_t &p_SelectedPresentQueueFamilyIndex );
 		bool CheckExtensionAvailability( const char *p_pExtension,
+			const std::vector< VkExtensionProperties > &p_Extensions );
+		void PrintExtensionNames(
 			const std::vector< VkExtensionProperties > &p_Extensions );
 
 		void	*m_pVulkanLibraryHandle;
@@ -46,11 +49,14 @@ namespace Cipher
 
 		// Vulkan
 		VkInstance					m_VulkanInstance;
-		VkPhysicalDevice			m_VulkanGPU;
-		VkPhysicalDeviceProperties	m_VulkanGPUProperties;
+		VkSurfaceKHR				m_VulkanPresentationSurface;
+		VkSwapchainKHR				m_VulkanSwapchain;
+		VkPhysicalDevice			m_VulkanPhysicalDevice;
 		VkDevice					m_VulkanDevice;
-		VkQueue						m_VulkanQueue;
-		uint32_t					m_VulkanQueueFamilyIndex;
+		VkQueue						m_VulkanGraphicsQueue;
+		VkQueue						m_VulkanPresentQueue;
+		uint32_t					m_VulkanGraphicsQueueFamilyIndex;
+		uint32_t					m_VulkanPresentQueueFamilyIndex;
 		uint32_t					m_VulkanQueueCount;
 		VkQueueFamilyProperties		*m_pVulkanQueueProperties;
 		std::vector< std::string >	m_ExtensionNames;
