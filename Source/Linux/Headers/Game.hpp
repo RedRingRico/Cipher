@@ -38,6 +38,20 @@ namespace Cipher
 			const std::vector< VkExtensionProperties > &p_Extensions );
 		void PrintExtensionNames(
 			const std::vector< VkExtensionProperties > &p_Extensions );
+		VkSurfaceFormatKHR GetSwapChainFormat(
+			std::vector< VkSurfaceFormatKHR > &p_SurfaceFormats );
+		VkExtent2D GetSwapChainExtent(
+			VkSurfaceCapabilitiesKHR &p_SurfaceCapabilities );
+		VkImageUsageFlags GetSwapChainUsageFlags(
+			VkSurfaceCapabilitiesKHR &p_SurfaceCapabilities );
+		VkPresentModeKHR GetSwapChainPresentMode(
+			std::vector< VkPresentModeKHR > &p_PresentModes );
+		uint32_t OnWindowSizeChanged( );
+		uint32_t CreateSwapChain( );
+		uint32_t CreateCommandBuffers( );
+		uint32_t RecordCommandBuffers( );
+		void ClearCmd( );
+		uint32_t Render( );
 
 		void	*m_pVulkanLibraryHandle;
 
@@ -48,20 +62,22 @@ namespace Cipher
 		xcb_intern_atom_reply_t	*m_pDeleteWindowAtom;
 
 		// Vulkan
-		VkInstance					m_VulkanInstance;
-		VkSurfaceKHR				m_VulkanPresentationSurface;
-		VkSwapchainKHR				m_VulkanSwapchain;
-		VkPhysicalDevice			m_VulkanPhysicalDevice;
-		VkDevice					m_VulkanDevice;
-		VkQueue						m_VulkanGraphicsQueue;
-		VkQueue						m_VulkanPresentQueue;
-		uint32_t					m_VulkanGraphicsQueueFamilyIndex;
-		uint32_t					m_VulkanPresentQueueFamilyIndex;
-		uint32_t					m_VulkanQueueCount;
-		VkSemaphore					m_VulkanImageAvailableSemaphore;
-		VkSemaphore					m_VulkanRenderingFinishedSemaphore;
-		VkQueueFamilyProperties		*m_pVulkanQueueProperties;
-		std::vector< std::string >	m_ExtensionNames;
+		VkInstance						m_VulkanInstance;
+		VkSurfaceKHR					m_VulkanPresentationSurface;
+		VkSwapchainKHR					m_VulkanSwapChain;
+		VkPhysicalDevice				m_VulkanPhysicalDevice;
+		VkDevice						m_VulkanDevice;
+		VkQueue							m_VulkanGraphicsQueue;
+		VkQueue							m_VulkanPresentQueue;
+		std::vector< VkCommandBuffer >	m_VulkanPresentQueueCmdBuffers;
+		VkCommandPool					m_VulkanPresentQueueCmdPool;
+		uint32_t						m_VulkanGraphicsQueueFamilyIndex;
+		uint32_t						m_VulkanPresentQueueFamilyIndex;
+		uint32_t						m_VulkanQueueCount;
+		VkSemaphore						m_VulkanImageAvailableSemaphore;
+		VkSemaphore						m_VulkanRenderingFinishedSemaphore;
+		VkQueueFamilyProperties			*m_pVulkanQueueProperties;
+		std::vector< std::string >		m_ExtensionNames;
 	};
 }
 
