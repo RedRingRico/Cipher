@@ -29,6 +29,9 @@ namespace Cipher
 		int Execute( );
 
 	private:
+		xcb_intern_atom_cookie_t GetCookieFromAtom(
+			const std::string &p_StateName );
+		xcb_atom_t GetReplyAtomFromCookie( xcb_intern_atom_cookie_t p_Cookie );
 		int InitialiseXCBConnection( );
 		int InitialiseVulkan( );
 		bool CheckPhysicalDeviceProperties( VkPhysicalDevice p_PhysicalDevice,
@@ -52,6 +55,7 @@ namespace Cipher
 		uint32_t RecordCommandBuffers( );
 		void ClearCmd( );
 		uint32_t Render( );
+		void ToggleFullscreen( );
 
 		void	*m_pVulkanLibraryHandle;
 
@@ -78,6 +82,8 @@ namespace Cipher
 		VkSemaphore						m_VulkanRenderingFinishedSemaphore;
 		VkQueueFamilyProperties			*m_pVulkanQueueProperties;
 		std::vector< std::string >		m_ExtensionNames;
+		bool							m_Fullscreen;
+		char							m_Keys[ 256 ];
 	};
 }
 

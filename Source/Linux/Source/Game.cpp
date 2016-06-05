@@ -24,8 +24,10 @@ namespace Cipher
 		m_VulkanPresentQueueCmdBuffers( 0 ),
 		m_VulkanPresentQueueCmdPool( VK_NULL_HANDLE ),
 		m_VulkanGraphicsQueueFamilyIndex( 0UL ),
-		m_VulkanPresentQueueFamilyIndex( 0UL )
+		m_VulkanPresentQueueFamilyIndex( 0UL ),
+		m_Fullscreen( false )
 	{
+		memset( m_Keys, 0, sizeof( m_Keys ) );
 	}
 
 	Game::~Game( )
@@ -148,7 +150,20 @@ namespace Cipher
 					}
 					case XCB_KEY_PRESS:
 					{
-						Run = false;
+						xcb_key_press_event_t *pKeyPress =
+							( xcb_key_press_event_t * )pEvent;
+						xcb_keycode_t Key = pKeyPress->detail;
+
+						if( Key == 9 )
+						{
+							Run = false;
+						}
+
+						if( Key == 95 )
+						{
+							ToggleFullscreen( );
+						}
+
 						break;
 					}
 				}
@@ -177,6 +192,31 @@ namespace Cipher
 		free( pDeleteReply );
 
 		return 0;
+	}
+
+	xcb_intern_atom_cookie_t Game::GetCookieFromAtom(
+		const std::string &p_StateName )
+	{
+		return xcb_intern_atom( m_pXCBConnection, 0, p_StateName.size( ),
+			p_StateName.c_str( ) );
+	}
+
+	xcb_atom_t Game::GetReplyAtomFromCookie(
+		xcb_intern_atom_cookie_t p_Cookie )
+	{
+		xcb_generic_error_t *pError;
+
+		xcb_intern_atom_reply_t *pReply = xcb_intern_atom_reply(
+			m_pXCBConnection, p_Cookie, &pError );
+
+		if( pError )
+		{
+			std::cout << "[Cipher::Game::GetReplyAtomFromCookie] <ERROR> "
+				"Cant get the reply atom from cookie: \"" <<
+				pError->error_code << "\""<< std::endl;
+		}
+
+		return pReply->atom;
 	}
 
 	int Game::InitialiseXCBConnection( )
@@ -208,7 +248,7 @@ namespace Cipher
 
 		uint32_t WindowValues[ ] =
 		{
-			m_pScreen->white_pixel,
+			m_pScreen->black_pixel,
 			XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_KEY_PRESS |
 				XCB_EVENT_MASK_STRUCTURE_NOTIFY
 		};
@@ -762,8 +802,14 @@ namespace Cipher
 				Extent.height = p_SurfaceCapabilities.maxImageExtent.height;
 			}
 
+			std::cout << "Extent: " << Extent.width << "x" << Extent.height <<
+				std::endl;
+
 			return Extent;
 		}
+
+		std::cout << "Extent: " << p_SurfaceCapabilities.currentExtent.width <<
+			"x" << p_SurfaceCapabilities.currentExtent.height << std::endl;
 
 		return p_SurfaceCapabilities.currentExtent;
 	}
@@ -1236,6 +1282,32 @@ namespace Cipher
 		}
 
 		return 0;
+	}
+
+	void Game::ToggleFullscreen( )
+	{
+		m_Fullscreen = !m_Fullscreen;
+
+		xcb_intern_atom_cookie_t WM_State =
+			GetCookieFromAtom( "_NET_WM_STATE" );
+		xcb_intern_atom_cookie_t WM_State_Fullscreen =
+			GetCookieFromAtom( "_NET_WM_STATE_FULLSCREEN" );
+
+		xcb_client_message_event_t Event;
+
+		Event.response_type = XCB_CLIENT_MESSAGE;
+		Event.type = GetReplyAtomFromCookie( WM_State );
+		Event.window = m_Window;
+		Event.format = 32;
+		Event.data.data32[ 0 ] = m_Fullscreen ? 1 : 0;
+		Event.data.data32[ 1 ] = GetReplyAtomFromCookie( WM_State_Fullscreen );
+		Event.data.data32[ 2 ] = XCB_ATOM_NONE;
+		Event.data.data32[ 3 ] = 0;
+		Event.data.data32[ 4 ] = 0;
+
+		xcb_send_event( m_pXCBConnection, 1, m_Window,
+			XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT |
+			XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, ( const char * )( &Event ) );
 	}
 }
 
